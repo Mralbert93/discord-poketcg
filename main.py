@@ -3,10 +3,11 @@ import datetime
 import discord
 from discord.ext import commands
 from discord.ui import Button, View
+from dotenv import load_dotenv
 from pymongo.mongo_client import MongoClient
 import random
 import os
-from dotenv import load_dotenv
+from sets_pagination import handle_sets
 
 load_dotenv()
 
@@ -104,72 +105,7 @@ async def begin(ctx):
 
 @bot.slash_command(name="sets", description="Use this to show your card progress for sets")
 async def sets(ctx):
-    user_id = str(ctx.author.id)
-
-    user_doc = users_col.find_one({"user_id": user_id})
-
-    if not user_doc or not user_doc.get('collected_cards'):
-        embed = discord.Embed(
-            title="🚨 **No Cards Collected Yet!**",
-            description=f"\u200b\nYou haven't collected any cards yet.\nOpen some booster packs first!\n\nUse `/open` to open a pack.\n\n{ctx.author.mention}",
-            color=0xe74c3c
-        )
-        embed.set_thumbnail(url=ctx.author.display_avatar.url)
-        return await ctx.respond(embeds=[embed])
-
-    collected_cards = user_doc['collected_cards']
-
-    sorted_sets = sorted(all_sets, key=lambda s: s['name']) 
-
-    current_page = 0  
-
-    async def update_embed():
-        set_data = sorted_sets[current_page]
-        set_id = set_data['id']
-        set_name = set_data['name']
-        set_image = set_data['image']
-        total_cards_in_set = set_data['total_cards'] if 'total_cards' in set_data else 0
-        cards_collected_in_set = sum(collected_cards.get(set_id, {}).values())
-
-        set_info = f"**{set_name}:**\n{cards_collected_in_set}/{total_cards_in_set} card{'s' if cards_collected_in_set != 1 else ''}\n"
-
-        embed = discord.Embed(
-            title="Your Set Progress",
-            description=f"{set_info}\n{ctx.author.mention}",
-            color=0x3498db
-        )
-        embed.set_thumbnail(url=set_image)
-        embed.set_author(name=ctx.author.name, icon_url=ctx.author.display_avatar.url)
-
-        return embed
-
-    prev_button = Button(style=discord.ButtonStyle.secondary, label="Previous", custom_id="prev_set")
-    next_button = Button(style=discord.ButtonStyle.secondary, label="Next", custom_id="next_set")
-
-    async def button_callback(interaction):
-        nonlocal current_page
-
-        if interaction.user.id != ctx.author.id:
-            return await interaction.response.send_message("This is not your set progress!", ephemeral=True)
-
-        if interaction.custom_id == "prev_set" and current_page > 0:
-            current_page -= 1
-        elif interaction.custom_id == "next_set" and current_page < len(sorted_sets) - 1:
-            current_page += 1
-
-        embed = await update_embed()
-
-        await interaction.response.edit_message(embed=embed, view=view)
-
-    view = View()
-    view.add_item(prev_button)
-    view.add_item(next_button)
-
-    prev_button.callback = button_callback
-    next_button.callback = button_callback
-
-    embed = await update_embed()
-    await ctx.respond(embed=embed, view=view)
+    await handle_sets(ctx, bot, all_sets, users_col)
 
 @bot.slash_command(name="open", description="Use this to open a booster pack")
 async def open(ctx):
