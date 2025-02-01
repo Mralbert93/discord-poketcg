@@ -60,11 +60,11 @@ def select_booster_pack():
 
     return booster_pack
 
-def get_card_collection_count(user_id, card_id):
+def get_card_collection_count(user_id, card_id, set_id):
     user_doc = users_col.find_one({"user_id": user_id})
     
-    collected_cards = user_doc.get('collected_cards', {})
-    return collected_cards.get(card_id, 0)
+    set_collection = user_doc.get('collected_cards', {}).get(set_id, {})
+    return set_collection.get(card_id, 0)
 
 @bot.slash_command(name="begin", description="Use this to begin playing")
 async def begin(ctx):
@@ -102,11 +102,42 @@ async def begin(ctx):
 
         await ctx.respond(embeds=[embed])
 
-@bot.slash_command(name="cards", description="Use this to show your cards")
+@bot.slash_command(name="sets", description="Use this to show your card progress for sets")
 async def begin(ctx):
     user_id = str(ctx.author.id)
 
     user_doc = users_col.find_one({"user_id": user_id})
+
+    if not user_doc or not user_doc.get('collected_cards'):
+        embed = discord.Embed(
+            title="🚨 **No Cards Collected Yet!**",
+            description=f"\u200b\nYou haven't collected any cards yet.\nOpen some booster packs first!\n\nUse `/open` to open a pack.\n\n{ctx.author.mention}",
+            color=0xe74c3c
+        )
+        embed.set_thumbnail(url=ctx.author.display_avatar.url)
+        return await ctx.respond(embeds=[embed])
+    
+    collected_cards = user_doc['collected_cards']
+
+    set_info = ""
+    sorted_sets = sorted(all_sets, key=lambda s: s['name'])  # Sort by set name alphabetically
+
+    for set_data in sorted_sets:
+        set_id = set_data['id']
+        set_name = set_data['name']
+        total_cards_in_set = set_data['total_cards'] if 'total_cards' in set_data else 0 
+        cards_collected_in_set = sum(collected_cards.get(set_id, {}).values()) 
+        
+        set_info += f"**{set_name}:**\n{cards_collected_in_set}/{total_cards_in_set} card{'s' if cards_collected_in_set != 1 else ''}\n\n"
+
+    embed = discord.Embed(
+        title="Your Set Progress",
+        description=f"{set_info}\n{ctx.author.mention}",
+        color=0x3498db
+    )
+    embed.set_thumbnail(url=ctx.author.display_avatar.url)
+
+    await ctx.respond(embeds=[embed])
 
 @bot.slash_command(name="open", description="Use this to open a booster pack")
 async def open(ctx):
@@ -161,10 +192,15 @@ async def open(ctx):
 
     for card in booster_pack:
         card_id = card['id'] 
-        if card_id in user_doc['collected_cards']:
-            user_doc['collected_cards'][card_id] += 1
+        set_id = card['set']
+
+        if set_id not in user_doc['collected_cards']:
+            user_doc['collected_cards'][set_id] = {}
+
+        if card_id in user_doc['collected_cards'][set_id]:
+            user_doc['collected_cards'][set_id][card_id] += 1
         else:
-            user_doc['collected_cards'][card_id] = 1
+            user_doc['collected_cards'][set_id][card_id] = 1
 
     users_col.update_one(
         {"user_id": user_id},
@@ -206,7 +242,7 @@ async def open(ctx):
                     set_name = set.get('name', 'Unknown Set')
                     set_image = set.get('image', 'https://via.placeholder.com/150')
             
-            card_count = get_card_collection_count(user_id, card_id)-1
+            card_count = get_card_collection_count(user_id, card_id, set_id)-1
             if card_count > 0:
                 collection_info = f"**Times Collected:** {card_count+1}"
             else:
