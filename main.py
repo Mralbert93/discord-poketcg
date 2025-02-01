@@ -60,6 +60,12 @@ def select_booster_pack():
 
     return booster_pack
 
+def get_card_collection_count(user_id, card_id):
+    user_doc = users_col.find_one({"user_id": user_id})
+    
+    collected_cards = user_doc.get('collected_cards', {})
+    return collected_cards.get(card_id, 0)
+
 @bot.slash_command(name="begin", description="Use this to begin playing")
 async def begin(ctx):
     user_id = str(ctx.author.id)
@@ -96,6 +102,12 @@ async def begin(ctx):
 
         await ctx.respond(embeds=[embed])
 
+@bot.slash_command(name="cards", description="Use this to show your cards")
+async def begin(ctx):
+    user_id = str(ctx.author.id)
+
+    user_doc = users_col.find_one({"user_id": user_id})
+
 @bot.slash_command(name="open", description="Use this to open a booster pack")
 async def open(ctx):
     booster_pack = select_booster_pack()
@@ -118,9 +130,10 @@ async def open(ctx):
     if packs_left <= 0:
         embed = discord.Embed(
             title="🚨 **You're out of packs!**",
-            description=f"\u200b\nYou gain one pack to open every 4 hours (up to 5 packs total).\nTry again later!\n\n{ctx.author.mention}",
+            description=f"\u200b\nYou can gain one pack to open every 4 hours.\nTry again later!\n\n{ctx.author.mention}\n\u200b",
             color=0xe74c3c
         )
+        embed.set_footer(text="Note: You can only hold up to 5 packs at a time.")
         embed.set_thumbnail(url=ctx.author.display_avatar.url)
         return await ctx.respond(embeds=[embed])
 
@@ -179,10 +192,12 @@ async def open(ctx):
         if current_index < len(cards):
             card = cards[current_index]
             
+            card_id = card.get('id', 'Unknown Id')
             name = card.get('name', 'Unknown Card')
             rarity = card.get('rarity', 'Unknown Rarity')
             rarity_percent = round(rarity_probabilities[rarity] * 100, 2)
             card_image = card.get('image', 'https://via.placeholder.com/150')
+            
             set_id = card.get('set', None)
             set_image = 'https://via.placeholder.com/150'
             if set_id:
@@ -190,10 +205,16 @@ async def open(ctx):
                 if set:
                     set_name = set.get('name', 'Unknown Set')
                     set_image = set.get('image', 'https://via.placeholder.com/150')
+            
+            card_count = get_card_collection_count(user_id, card_id)-1
+            if card_count > 0:
+                collection_info = f"**Times Collected:** {card_count+1}"
+            else:
+                collection_info = f"**New Card!** {pika}{pika}{pika}"
 
             embed = discord.Embed(
                 title=f"Card {current_index+1}/{len(cards)}",
-                description=f"**Name:** {name}\n**Set:** {set_name}\n**Rarity:** {rarity} ({rarity_percent}%)\n\n{ctx.author.mention}",
+                description=f"**Name:** {name}\n**Set:** {set_name}\n**Rarity:** {rarity} ({rarity_percent}%)\n\n{collection_info}\n\n{ctx.author.mention}",
                 color=0x3498db
             )
             embed.set_image(url=card_image)
@@ -206,11 +227,13 @@ async def open(ctx):
 
             user_states[user_id]["current_index"] = current_index + 1
         else:
-            card_list = "\n".join([f"**{card['name']}** ({card.get('rarity', 'Unknown Rarity')})" for card in cards])
-            
+            if (user_doc['packs_left']-1) > 0:
+                pack_info = f"You have **{user_doc['packs_left']-1} booster packs** left.\nYou can open another pack with `/open`."
+            else:
+                pack_info = f"You have **{user_doc['packs_left']-1} booster packs** left.\nPlease wait **4 hours**.\nThen, you can open another pack with `/open`." 
             final_embed = discord.Embed(
-                title="🎉 **All cards revealed!** 🎉",
-                description=f"Here are the cards you opened:\n\n{card_list}\n\n{ctx.author.mention}",
+                title="🎉 **All cards pulled!** 🎉",
+                description=f"{pack_info}\n\n{ctx.author.mention}",
                 color=0x3498db
             )
             final_embed.set_thumbnail(url=ctx.author.display_avatar.url)
@@ -239,12 +262,16 @@ async def on_ready():
     
     global all_sets
     global all_cards
+    global pika
 
     all_sets = list(sets_col.find()) 
     print(f"Loaded {len(all_sets)} sets into memory.")
     
     all_cards = list(cards_col.find()) 
     print(f"Loaded {len(all_cards)} cards into memory.")
+
+    guild = bot.get_guild(1094098329937379422)
+    pika = discord.utils.get(guild.emojis, name="TCGPika")
 
     await hourly_packs_loop()
 
