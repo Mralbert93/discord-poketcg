@@ -329,7 +329,7 @@ async def open(ctx):
 
 async def hourly_packs_loop():
     while True:
-        await asyncio.sleep(60)
+        await asyncio.sleep(14400)
         for user_doc in users_col.find({"packs_left": {"$lt": 5}}):
             users_col.update_one(
                 {"user_id": user_doc["user_id"]},
