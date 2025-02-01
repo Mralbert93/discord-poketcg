@@ -148,10 +148,13 @@ async def open(ctx):
     )
     embed.set_thumbnail(url=ctx.author.display_avatar.url)
 
-    button = Button(style=discord.ButtonStyle.secondary, label="Next Card", custom_id="next_card")
+    next_button = Button(style=discord.ButtonStyle.secondary, label="Next Card", custom_id="next_card")
+    prev_button = Button(style=discord.ButtonStyle.secondary, label="Previous Card", custom_id="prev_card", disabled=True)
+    finish_button = Button(style=discord.ButtonStyle.success, label="Finish", custom_id="finish", disabled=True)
 
     view = View()
-    view.add_item(button)
+    view.add_item(prev_button)
+    view.add_item(next_button)
 
     await ctx.respond(
         embeds=[embed],
@@ -193,49 +196,119 @@ async def open(ctx):
         cards = user_state["cards"]
         current_index = user_state["current_index"]
 
-        if current_index < len(cards):
-            card = cards[current_index]
-            
-            card_id = card.get('id', 'Unknown Id')
-            name = card.get('name', 'Unknown Card')
-            rarity = card.get('rarity', 'Unknown Rarity')
-            rarity_percent = round(rarity_probabilities[rarity] * 100, 2)
-            card_image = card.get('image', 'https://via.placeholder.com/150')
-            
-            set_id = card.get('set', None)
-            set_image = 'https://via.placeholder.com/150'
-            if set_id:
-                set = next((s for s in all_sets if s['id'] == set_id), None)
-                if set:
-                    set_name = set.get('name', 'Unknown Set')
-                    set_image = set.get('image', 'https://via.placeholder.com/150')
-            
-            card_count = get_card_collection_count(user_id, card_id, set_id)-1
-            if card_count > 0:
-                collection_info = f"**Times Collected:** {card_count+1}"
-            else:
-                collection_info = f"**New Card!** {pika}{pika}{pika}"
+        # Handle "Next Card"
+        if interaction.custom_id == "next_card":
+            if current_index < len(cards):
+                card = cards[current_index]
+                
+                card_id = card.get('id', 'Unknown Id')
+                name = card.get('name', 'Unknown Card')
+                rarity = card.get('rarity', 'Unknown Rarity')
+                rarity_percent = round(rarity_probabilities[rarity] * 100, 2)
+                card_image = card.get('image', 'https://via.placeholder.com/150')
+                
+                set_id = card.get('set', None)
+                set_image = 'https://via.placeholder.com/150'
+                if set_id:
+                    set = next((s for s in all_sets if s['id'] == set_id), None)
+                    if set:
+                        set_name = set.get('name', 'Unknown Set')
+                        set_image = set.get('image', 'https://via.placeholder.com/150')
+                
+                card_count = get_card_collection_count(user_id, card_id, set_id)-1
+                if card_count > 0:
+                    collection_info = f"**Times Collected:** {card_count+1}"
+                else:
+                    collection_info = f"**New Card!** {pika}{pika}{pika}"
 
-            embed = discord.Embed(
-                title=f"Card {current_index+1}/{len(cards)}",
-                description=f"**Name:** {name}\n**Set:** {set_name}\n**Rarity:** {rarity} ({rarity_percent}%)\n\n{collection_info}\n\n{ctx.author.mention}",
-                color=0x3498db
-            )
-            embed.set_image(url=card_image)
-            embed.set_thumbnail(url=set_image)
-            embed.set_author(name=ctx.author.name, icon_url=ctx.author.display_avatar.url)
-            
-            await interaction.response.edit_message(
-                embeds=[embed],
-                view=view
-            )
+                embed = discord.Embed(
+                    title=f"Card {current_index+1}/{len(cards)}",
+                    description=f"**Name:** {name}\n**Set:** {set_name}\n**Rarity:** {rarity} ({rarity_percent}%)\n\n{collection_info}\n\n{ctx.author.mention}",
+                    color=0x3498db
+                )
+                embed.set_image(url=card_image)
+                embed.set_thumbnail(url=set_image)
+                embed.set_author(name=ctx.author.name, icon_url=ctx.author.display_avatar.url)
+                
+                # Enable/Disable buttons based on current index
+                prev_button.disabled = (current_index == 0)
+                next_button.disabled = (current_index == len(cards) - 1)
+                finish_button.disabled = (current_index != len(cards) - 1)
 
-            user_states[user_id]["current_index"] = current_index + 1
-        else:
-            if (user_doc['packs_left']-1) > 0:
-                pack_info = f"You have **{user_doc['packs_left']-1} booster packs** left.\nYou can open another pack with `/open`."
+                # Update view with "Finish" button on last card
+                view.clear_items()
+                view.add_item(prev_button)
+                if current_index == len(cards) - 1:
+                    view.add_item(finish_button)  # Add Finish button when last card is reached
+                else:
+                    view.add_item(next_button)  # Add Next button if it's not the last card
+                await interaction.response.edit_message(
+                    embeds=[embed],
+                    view=view
+                )
+
+                user_states[user_id]["current_index"] = current_index + 1
+
+        # Handle "Previous Card"
+        elif interaction.custom_id == "prev_card":
+            if current_index > 0:
+                user_states[user_id]["current_index"] = current_index - 1
+                card = cards[current_index - 1]
+                
+                card_id = card.get('id', 'Unknown Id')
+                name = card.get('name', 'Unknown Card')
+                rarity = card.get('rarity', 'Unknown Rarity')
+                rarity_percent = round(rarity_probabilities[rarity] * 100, 2)
+                card_image = card.get('image', 'https://via.placeholder.com/150')
+                
+                set_id = card.get('set', None)
+                set_image = 'https://via.placeholder.com/150'
+                if set_id:
+                    set = next((s for s in all_sets if s['id'] == set_id), None)
+                    if set:
+                        set_name = set.get('name', 'Unknown Set')
+                        set_image = set.get('image', 'https://via.placeholder.com/150')
+                
+                card_count = get_card_collection_count(user_id, card_id, set_id)-1
+                if card_count > 0:
+                    collection_info = f"**Times Collected:** {card_count+1}"
+                else:
+                    collection_info = f"**New Card!** {pika}{pika}{pika}"
+
+                embed = discord.Embed(
+                    title=f"Card {current_index}/{len(cards)}",
+                    description=f"**Name:** {name}\n**Set:** {set_name}\n**Rarity:** {rarity} ({rarity_percent}%)\n\n{collection_info}\n\n{ctx.author.mention}",
+                    color=0x3498db
+                )
+                embed.set_image(url=card_image)
+                embed.set_thumbnail(url=set_image)
+                embed.set_author(name=ctx.author.name, icon_url=ctx.author.display_avatar.url)
+
+                # Enable/Disable buttons based on current index
+                prev_button.disabled = (current_index == 1)
+                next_button.disabled = (current_index == len(cards) - 1)
+
+                # Update view with "Finish" button on last card
+                view.clear_items()
+                view.add_item(prev_button)
+                if current_index == len(cards) - 1:
+                    view.add_item(finish_button)  # Add Finish button when last card is reached
+                else:
+                    view.add_item(next_button)  # Add Next button if it's not the last card
+                await interaction.response.edit_message(
+                    embeds=[embed],
+                    view=view
+                )
+
+        # Handle "Finish" button
+        elif interaction.custom_id == "finish":
+            # Calculate how many packs are left
+            packs_left = user_doc['packs_left']
+            if packs_left > 0:
+                pack_info = f"You have **{packs_left} booster packs** left.\nYou can open another pack with `/open`."
             else:
-                pack_info = f"You have **{user_doc['packs_left']-1} booster packs** left.\nPlease wait **4 hours**.\nThen, you can open another pack with `/open`." 
+                pack_info = f"You have **{packs_left} booster packs** left.\nPlease wait **4 hours**.\nThen, you can open another pack with `/open`." 
+
             final_embed = discord.Embed(
                 title="🎉 **All cards pulled!** 🎉",
                 description=f"{pack_info}\n\n{ctx.author.mention}",
@@ -245,12 +318,14 @@ async def open(ctx):
 
             await interaction.response.edit_message(
                 embeds=[final_embed],
-                view=None 
+                view=None  # Disable the buttons
             )
             
             del user_states[user_id]
 
-    button.callback = button_callback
+    next_button.callback = button_callback
+    prev_button.callback = button_callback
+    finish_button.callback = button_callback
 
 async def hourly_packs_loop():
     while True:
