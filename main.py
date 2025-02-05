@@ -1,12 +1,12 @@
 import asyncio
-import datetime
 import discord
 from discord.ext import commands
 from discord.ui import Button, View
 from dotenv import load_dotenv
+import os
 from pymongo.mongo_client import MongoClient
 import random
-import os
+import uuid
 from sets_pagination import handle_sets
 
 load_dotenv()
@@ -112,6 +112,7 @@ async def open(ctx):
     booster_pack = select_booster_pack()
 
     user_id = str(ctx.author.id)
+    interaction_guid = str(uuid.uuid4())
 
     user_doc = users_col.find_one({"user_id": user_id})
 
@@ -136,11 +137,6 @@ async def open(ctx):
         embed.set_thumbnail(url=ctx.author.display_avatar.url)
         return await ctx.respond(embeds=[embed])
 
-    user_states[user_id] = {
-        "cards": booster_pack,
-        "current_index": 0
-    }
-
     embed = discord.Embed(
         title="🎉 **You opened a booster pack!** 🎉",
         description=f"\u200b\nPress 'Next Card' to reveal your first card.\n\n{ctx.author.mention}",
@@ -148,9 +144,9 @@ async def open(ctx):
     )
     embed.set_thumbnail(url=ctx.author.display_avatar.url)
 
-    next_button = Button(style=discord.ButtonStyle.secondary, label="Next Card", custom_id="next_card")
-    prev_button = Button(style=discord.ButtonStyle.secondary, label="Previous Card", custom_id="prev_card", disabled=True)
-    finish_button = Button(style=discord.ButtonStyle.success, label="Finish", custom_id="finish", disabled=True)
+    next_button = Button(style=discord.ButtonStyle.secondary, label="Next Card", custom_id=f"next_card_{interaction_guid}")
+    prev_button = Button(style=discord.ButtonStyle.secondary, label="Previous Card", custom_id=f"prev_card_{interaction_guid}", disabled=True)
+    finish_button = Button(style=discord.ButtonStyle.success, label="Finish", custom_id=f"finish_{interaction_guid}", disabled=True)
 
     view = View()
     view.add_item(prev_button)
@@ -160,6 +156,12 @@ async def open(ctx):
         embeds=[embed],
         view=view
     )
+
+
+    user_states[interaction_guid] = {
+        "cards": booster_pack,
+        "current_index": 0
+    }
 
     for card in booster_pack:
         card_id = card['id'] 
@@ -184,20 +186,20 @@ async def open(ctx):
     )
 
     async def button_callback(interaction):
-        if interaction.user.id != ctx.author.id:
-            return await interaction.response.send_message("This is not your booster pack!", ephemeral=True)
-
         user_id = str(interaction.user.id)
-        user_state = user_states.get(user_id, None)
+
+        custom_id = interaction.custom_id
+        interaction_guid = custom_id.split('_')[-1]
+
+        user_state = user_states.get(interaction_guid, None)
 
         if not user_state:
-            return await interaction.response.send_message("Session expired or invalid. Please start again.", ephemeral=True)
+            return await interaction.response.send_message("Sorry, this pull is no longer available.", ephemeral=True)
 
         cards = user_state["cards"]
         current_index = user_state["current_index"]
 
-        # Handle "Next Card"
-        if interaction.custom_id == "next_card":
+        if interaction.custom_id.startswith("next_card"):
             if current_index < len(cards):
                 card = cards[current_index]
                 
@@ -230,29 +232,27 @@ async def open(ctx):
                 embed.set_thumbnail(url=set_image)
                 embed.set_author(name=ctx.author.name, icon_url=ctx.author.display_avatar.url)
                 
-                # Enable/Disable buttons based on current index
                 prev_button.disabled = (current_index == 0)
                 next_button.disabled = (current_index == len(cards) - 1)
                 finish_button.disabled = (current_index != len(cards) - 1)
 
-                # Update view with "Finish" button on last card
                 view.clear_items()
                 view.add_item(prev_button)
                 if current_index == len(cards) - 1:
-                    view.add_item(finish_button)  # Add Finish button when last card is reached
+                    view.add_item(finish_button)  
                 else:
-                    view.add_item(next_button)  # Add Next button if it's not the last card
+                    view.add_item(next_button)  
                 await interaction.response.edit_message(
                     embeds=[embed],
                     view=view
                 )
 
-                user_states[user_id]["current_index"] = current_index + 1
+                user_states[interaction_guid]["current_index"] = current_index + 1
 
         # Handle "Previous Card"
-        elif interaction.custom_id == "prev_card":
+        elif interaction.custom_id.startswith("prev_card"):
             if current_index > 0:
-                user_states[user_id]["current_index"] = current_index - 1
+                user_states[interaction_guid]["current_index"] = current_index - 1
                 card = cards[current_index - 1]
                 
                 card_id = card.get('id', 'Unknown Id')
@@ -284,26 +284,22 @@ async def open(ctx):
                 embed.set_thumbnail(url=set_image)
                 embed.set_author(name=ctx.author.name, icon_url=ctx.author.display_avatar.url)
 
-                # Enable/Disable buttons based on current index
                 prev_button.disabled = (current_index == 1)
-                next_button.disabled = (current_index == len(cards) - 1)
+                next_button.disabled = (current_index == len(cards))
 
-                # Update view with "Finish" button on last card
                 view.clear_items()
                 view.add_item(prev_button)
-                if current_index == len(cards) - 1:
-                    view.add_item(finish_button)  # Add Finish button when last card is reached
+                if current_index == len(cards):
+                    view.add_item(finish_button)
                 else:
-                    view.add_item(next_button)  # Add Next button if it's not the last card
+                    view.add_item(next_button) 
                 await interaction.response.edit_message(
                     embeds=[embed],
                     view=view
                 )
 
-        # Handle "Finish" button
-        elif interaction.custom_id == "finish":
-            # Calculate how many packs are left
-            packs_left = user_doc['packs_left']
+        elif interaction.custom_id.startswith("finish"):
+            packs_left = user_doc['packs_left']-1
             if packs_left > 0:
                 pack_info = f"You have **{packs_left} booster packs** left.\nYou can open another pack with `/open`."
             else:
@@ -316,12 +312,17 @@ async def open(ctx):
             )
             final_embed.set_thumbnail(url=ctx.author.display_avatar.url)
 
+            view.clear_items()
+            view.add_item(prev_button)
+            if current_index == len(cards) - 1:
+                view.add_item(finish_button)
+            elif current_index != len(cards):
+                view.add_item(next_button) 
+
             await interaction.response.edit_message(
                 embeds=[final_embed],
-                view=None  # Disable the buttons
+                view=view
             )
-            
-            del user_states[user_id]
 
     next_button.callback = button_callback
     prev_button.callback = button_callback
