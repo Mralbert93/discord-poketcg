@@ -336,6 +336,14 @@ async def hourly_packs_loop():
                 {"user_id": user_doc["user_id"]},
                 {"$inc": {"packs_left": 1}}
             )
+        embed = discord.Embed(
+            title="🎁 **Packs Distributed** 🎁",
+            description=f"\u200b\nBooster packs have been distributed to users with less than 5 packs.\nThe next distribution will happen in **4 hours**.\n\u200b",
+            color=0x3498db 
+        )
+        embed.set_thumbnail(url=bot.user.display_avatar.url)
+        channel = bot.get_channel(1335401186429501525)
+        await channel.send(embed=embed)
 
 @bot.event
 async def on_ready():
