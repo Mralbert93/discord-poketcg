@@ -3,7 +3,7 @@ from discord.ui import Button, View
 
 page_states = {}
 
-async def update_embed(ctx, user_doc, cards_list, current_page):
+async def update_embed(ctx, user_doc, cards_list, current_page, bot_avatar):
     cards_per_page = 15
     total_pages = (len(cards_list) + cards_per_page - 1) // cards_per_page
     page_cards = cards_list[current_page * cards_per_page:(current_page + 1) * cards_per_page]
@@ -12,6 +12,9 @@ async def update_embed(ctx, user_doc, cards_list, current_page):
     for card_name, card_id, set_name, rarity, count, card_image in page_cards:
         embed.add_field(name=f"**{card_name}**", value=f"ID: {card_id}\nSet: {set_name}\nRarity: {rarity}\nCount: {count}\n[View]({card_image})", inline=True)
 
+    embed.set_thumbnail(url=bot_avatar)
+    embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
+    
     return embed
 
 def create_pagination_buttons():
@@ -34,11 +37,11 @@ async def button_callback(interaction, ctx, user_doc, cards_list, view):
 
     page_states[user_id] = current_page
 
-    embed = await update_embed(ctx, user_doc, cards_list, current_page)
+    embed = await update_embed(ctx, user_doc, cards_list, current_page, ctx.bot.user.display_avatar.url)
 
     await interaction.response.edit_message(embed=embed, view=view)
 
-async def handle_cards(ctx, bot, all_cards, all_sets, users_col):
+async def handle_cards(ctx, bot, all_cards, all_sets, users_col, bot_avatar):
     user_id = str(ctx.author.id)
     user_doc = users_col.find_one({"user_id": user_id})
 
@@ -74,9 +77,9 @@ async def handle_cards(ctx, bot, all_cards, all_sets, users_col):
     prev_button.callback = lambda interaction: button_callback(interaction, ctx, user_doc, cards_list, view)
     next_button.callback = lambda interaction: button_callback(interaction, ctx, user_doc, cards_list, view)
 
-    embed = await update_embed(ctx, user_doc, cards_list, page_states[user_id])
+    embed = await update_embed(ctx, user_doc, cards_list, page_states[user_id], bot_avatar)
 
-    embed.set_thumbnail(url=ctx.author.display_avatar.url)
-    embed.set_author(name=ctx.author.name, icon_url=ctx.author.display_avatar.url)
+    embed.set_thumbnail(url=bot_avatar)
+    embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
 
     await ctx.respond(embed=embed, view=view)
