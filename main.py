@@ -257,7 +257,6 @@ async def open(ctx):
 
         # Handle "Previous Card"
         elif interaction.custom_id.startswith("prev_card"):
-            print(f"Current index: {current_index}")
             if current_index > 0:
                 user_states[interaction_guid]["current_index"] = current_index - 1
                 card = cards[current_index - 1]
