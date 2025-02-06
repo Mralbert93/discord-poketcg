@@ -23,7 +23,7 @@ async def update_embed(ctx, user_doc, sorted_sets, current_page):
         color=0x3498db
     )
     embed.set_thumbnail(url=set_image)
-    embed.set_author(name=ctx.author.name, icon_url=ctx.author.display_avatar.url)
+    embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
 
     return embed
 
