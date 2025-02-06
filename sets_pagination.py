@@ -81,7 +81,7 @@ async def handle_sets(ctx, bot, all_sets, users_col):
     prev_button, next_button = create_pagination_buttons()
 
     # Create a view and add buttons
-    view = View()
+    view = View(timeout=None)
     view.add_item(prev_button)
     view.add_item(next_button)
 
