@@ -111,7 +111,7 @@ async def sets(ctx):
 
 @bot.slash_command(name="cards", description="Use this to show all your cards")
 async def cards(ctx):
-    await handle_cards(ctx, bot, all_cards, all_sets, users_col)
+    await handle_cards(ctx, bot, all_cards, all_sets, users_col, bot.user.display_avatar.url)
 
 @bot.slash_command(name="open", description="Use this to open a booster pack")
 async def open(ctx):
@@ -236,7 +236,7 @@ async def open(ctx):
                 )
                 embed.set_image(url=card_image)
                 embed.set_thumbnail(url=set_image)
-                embed.set_author(name=ctx.author.name, icon_url=ctx.author.display_avatar.url)
+                embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
                 
                 prev_button.disabled = (current_index == 0)
                 next_button.disabled = (current_index == len(cards) - 1)
@@ -288,7 +288,7 @@ async def open(ctx):
                 )
                 embed.set_image(url=card_image)
                 embed.set_thumbnail(url=set_image)
-                embed.set_author(name=ctx.author.name, icon_url=ctx.author.display_avatar.url)
+                embed.set_author(name=ctx.author.display_name, icon_url=ctx.author.display_avatar.url)
 
                 prev_button.disabled = (current_index == 1)
                 next_button.disabled = (current_index == len(cards))
