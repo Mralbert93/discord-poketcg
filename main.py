@@ -7,6 +7,7 @@ import os
 from pymongo.mongo_client import MongoClient
 import random
 import uuid
+from cards_pagination import handle_cards
 from sets_pagination import handle_sets
 
 load_dotenv()
@@ -25,6 +26,7 @@ users_col = db['users']
 all_cards = []
 all_sets = []
 user_states = {}
+page_states = {}
 
 rarity_probabilities = {
     "Common": 0.70,
@@ -107,6 +109,10 @@ async def begin(ctx):
 async def sets(ctx):
     await handle_sets(ctx, bot, all_sets, users_col)
 
+@bot.slash_command(name="cards", description="Use this to show all your cards")
+async def cards(ctx):
+    await handle_cards(ctx, bot, all_cards, all_sets, users_col)
+
 @bot.slash_command(name="open", description="Use this to open a booster pack")
 async def open(ctx):
     booster_pack = select_booster_pack()
@@ -148,7 +154,7 @@ async def open(ctx):
     prev_button = Button(style=discord.ButtonStyle.secondary, label="Previous Card", custom_id=f"prev_card_{interaction_guid}", disabled=True)
     finish_button = Button(style=discord.ButtonStyle.success, label="Finish", custom_id=f"finish_{interaction_guid}", disabled=True)
 
-    view = View()
+    view = View(timeout=None)
     view.add_item(prev_button)
     view.add_item(next_button)
 
@@ -251,6 +257,7 @@ async def open(ctx):
 
         # Handle "Previous Card"
         elif interaction.custom_id.startswith("prev_card"):
+            print(f"Current index: {current_index}")
             if current_index > 0:
                 user_states[interaction_guid]["current_index"] = current_index - 1
                 card = cards[current_index - 1]
@@ -330,20 +337,20 @@ async def open(ctx):
 
 async def hourly_packs_loop():
     while True:
-        await asyncio.sleep(14400)
         for user_doc in users_col.find({"packs_left": {"$lt": 5}}):
             users_col.update_one(
                 {"user_id": user_doc["user_id"]},
                 {"$inc": {"packs_left": 1}}
             )
         embed = discord.Embed(
-            title="🎁 **Packs Distributed** 🎁",
-            description=f"\u200b\nBooster packs have been distributed to users with less than 5 packs.\nThe next distribution will happen in **4 hours**.\n\u200b",
+            title="🎁 **Packs Distributed!** 🎁",
+            description=f"\u200b\nOne additional pack has been added for users with less than 5 packs. The next distribution will happen in approximately 4 hours.\n\u200b",
             color=0x3498db 
         )
         embed.set_thumbnail(url=bot.user.display_avatar.url)
         channel = bot.get_channel(1335401186429501525)
         await channel.send(embed=embed)
+        await asyncio.sleep(14400)
 
 @bot.event
 async def on_ready():
